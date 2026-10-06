@@ -382,10 +382,27 @@ RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
 REANA_RATELIMIT_SLOW = _get_rate_limit("REANA_RATELIMIT_SLOW", "1/5 second")
 REANA_RATELIMIT_SLOWER = _get_rate_limit("REANA_RATELIMIT_SLOWER", "30 per minute")
 REANA_RATELIMIT_SLOWEST = _get_rate_limit("REANA_RATELIMIT_SLOWEST", "5 per hour")
+REANA_RATELIMIT_LOGIN = _get_rate_limit("REANA_RATELIMIT_LOGIN", "120 per minute")
+"""Rate limit for starting and for completing a browser login.
+
+A browser that is not signed in yet can only be told apart by its client
+address, so everybody behind one institutional proxy or NAT shares this
+budget. The login start and the OAuth callback are counted separately, hence
+the default lets 120 people behind one address sign in within the same
+minute, which covers a workshop or a lecture hall logging in together.
+
+Raise it for larger groups behind one address. The trade-off is that the same
+budget is what bounds unauthenticated requests from that address, each
+callback of which can trigger a token request to the identity provider; the
+limit cannot distinguish a busy classroom from one abusive client.
+"""
+
+RATELIMIT_LOGIN_FLOW_ENDPOINTS = ("auth.login", "auth.oauth_callback")
+"""Browser login endpoints that are rate limited separately per address."""
 
 RATELIMIT_PER_ENDPOINT = {
-    "auth.login": REANA_RATELIMIT_SLOWER,
-    "auth.oauth_callback": REANA_RATELIMIT_SLOWER,
+    "auth.login": REANA_RATELIMIT_LOGIN,
+    "auth.oauth_callback": REANA_RATELIMIT_LOGIN,
     "auth.logout": REANA_RATELIMIT_SLOWER,
     "launch.launch": REANA_RATELIMIT_SLOW,
     # Both endpoints can spawn a sandboxed validation Job per call (for
