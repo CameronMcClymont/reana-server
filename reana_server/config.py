@@ -616,6 +616,11 @@ REANA_AUTH = {
     # Public client id used by reana-client for the device authorization
     # grant; advertised through the openid-configuration proxy endpoint.
     "cli_client_id": os.getenv("REANA_AUTH_CLIENT_ID", "reana-cli"),
+    # Optional fixed loopback port that CLI clients must use for the browser
+    # login callback; advertised through the openid-configuration proxy
+    # endpoint for identity providers requiring an exact redirect URI. Kept
+    # as a raw string here: it is parsed and validated at application startup.
+    "cli_loopback_port": os.getenv("REANA_AUTH_CLI_LOOPBACK_PORT", ""),
     # Claim carrying REANA roles.
     "roles_claim": os.getenv("REANA_AUTH_ROLES_CLAIM", "reana_roles"),
     # Role required to use protected API endpoints. Authentication-enabled

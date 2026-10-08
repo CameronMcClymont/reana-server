@@ -162,8 +162,10 @@ def openid_configuration():
       description: >-
         Relays the OIDC discovery document of the deployment's trusted
         issuer, extended with the public client id that reana-client must
-        use for the device authorization grant. This lets clients discover
-        the identity provider knowing only the REANA URL.
+        use for the device authorization grant and, when the deployment
+        configures one, the fixed loopback port that CLI clients must use
+        for the browser login callback. This lets clients discover the
+        identity provider knowing only the REANA URL.
       operationId: get_openid_configuration
       security: []
       produces:
@@ -192,6 +194,14 @@ def openid_configuration():
                 type: string
               reana_cli_client_id:
                 type: string
+              reana_cli_loopback_port:
+                type: integer
+                minimum: 1
+                maximum: 65535
+                description: >-
+                  Fixed loopback port that CLI clients must use for the
+                  browser login callback. Present only when configured by
+                  the deployment.
         500:
           description: The identity provider integration is not correctly configured.
           schema:
@@ -223,9 +233,15 @@ def openid_configuration():
             jsonify(message="Could not fetch the issuer's OpenID configuration."),
             502,
         )
-    cli_client_id = get_auth_config()["cli_client_id"]
+    auth_config = get_auth_config()
+    cli_client_id = auth_config["cli_client_id"]
     configuration["reana_cli_client_id"] = cli_client_id
     configuration["reana_client_id"] = cli_client_id  # legacy alias
+    # REANA owns this extension field: never relay an issuer-supplied value.
+    configuration.pop("reana_cli_loopback_port", None)
+    cli_loopback_port = auth_config.get("cli_loopback_port")
+    if cli_loopback_port:
+        configuration["reana_cli_loopback_port"] = cli_loopback_port
     return jsonify(configuration), 200
 
 

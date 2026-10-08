@@ -244,9 +244,44 @@ def _validate_discovered_endpoint(name, value):
     )
 
 
+def parse_cli_loopback_port(value):
+    """Return the configured CLI login callback port, or ``None`` when unset.
+
+    :param value: Raw configuration value, typically the content of the
+        ``REANA_AUTH_CLI_LOOPBACK_PORT`` environment variable.
+    :raises IssuerMisconfiguredError: When the value is not an integer TCP
+        port in the 1..65535 range.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        if not (value.isascii() and value.isdigit()):
+            raise IssuerMisconfiguredError(
+                "OIDC CLI loopback port must be an integer between 1 and "
+                f"65535, got {value!r}."
+            )
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise IssuerMisconfiguredError(
+            "OIDC CLI loopback port must be an integer between 1 and "
+            f"65535, got {value!r}."
+        )
+    if not 1 <= value <= 65535:
+        raise IssuerMisconfiguredError(
+            f"OIDC CLI loopback port must be between 1 and 65535, got {value}."
+        )
+    return value
+
+
 def validate_auth_configuration():
     """Fail fast when the application's OIDC transport policy is inconsistent."""
     auth_config = get_auth_config()
+    auth_config["cli_loopback_port"] = parse_cli_loopback_port(
+        auth_config.get("cli_loopback_port")
+    )
     issuer = auth_config.get("issuer", "")
     if not issuer:
         if auth_config.get("backchannel_base_url") or auth_config.get(

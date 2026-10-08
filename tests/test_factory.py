@@ -359,6 +359,100 @@ def test_factory_rejects_empty_authentication_contract_values(key, message):
 
 
 @pytest.mark.parametrize(
+    ("setting", "expected"),
+    [
+        ("", None),
+        ("  ", None),
+        (None, None),
+        ("8899", 8899),
+        (" 8899 ", 8899),
+        (8899, 8899),
+        ("1", 1),
+        ("65535", 65535),
+    ],
+)
+def test_factory_normalizes_cli_loopback_port(setting, expected):
+    """The optional CLI login callback port is parsed once at startup."""
+    app = _make_app(
+        {
+            "REANA_AUTH": {
+                "issuer": "https://idp.example.org/realms/reana",
+                "cli_loopback_port": setting,
+            }
+        }
+    )
+    assert app.config["REANA_AUTH"]["cli_loopback_port"] == expected
+
+
+@pytest.mark.parametrize(
+    "setting",
+    ["0", 0, "-1", "65536", "70000", "not-a-port", "88.99", "1e3", "+8899", True, 1.5],
+)
+def test_factory_rejects_invalid_cli_loopback_port(setting):
+    """An invalid CLI login callback port is a clear startup error."""
+    with pytest.raises(AuthError, match="CLI loopback port"):
+        _make_app(
+            {
+                "REANA_AUTH": {
+                    "issuer": "https://idp.example.org/realms/reana",
+                    "cli_loopback_port": setting,
+                }
+            }
+        )
+
+
+def test_factory_reads_cli_loopback_port_from_environment(monkeypatch):
+    """The raw environment value is kept as text until startup validation."""
+    import importlib
+
+    import reana_server.config as server_config
+
+    monkeypatch.setenv("REANA_AUTH_CLI_LOOPBACK_PORT", "not-a-port")
+    try:
+        importlib.reload(server_config)
+        assert server_config.REANA_AUTH["cli_loopback_port"] == "not-a-port"
+    finally:
+        monkeypatch.delenv("REANA_AUTH_CLI_LOOPBACK_PORT")
+        importlib.reload(server_config)
+    assert server_config.REANA_AUTH["cli_loopback_port"] == ""
+
+
+@pytest.mark.parametrize(
+    ("configured", "issuer_value", "expected"),
+    [
+        (None, None, None),
+        ("8899", None, 8899),
+        ("8899", 1234, 8899),
+        (None, 1234, None),
+    ],
+)
+def test_openid_configuration_advertises_cli_loopback_port(
+    configured, issuer_value, expected
+):
+    """REANA owns the advertised CLI login callback port."""
+    issuer = "https://idp.example.org/realms/reana"
+    document = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/auth",
+        "token_endpoint": f"{issuer}/token",
+    }
+    if issuer_value is not None:
+        document["reana_cli_loopback_port"] = issuer_value
+    app = _make_app({"REANA_AUTH": {"issuer": issuer, "cli_loopback_port": configured}})
+    with patch(
+        "reana_server.rest.auth.get_openid_configuration", return_value=document
+    ):
+        response = app.test_client().get("/api/.well-known/openid-configuration")
+    assert response.status_code == 200
+    assert response.json["reana_cli_client_id"] == "reana-cli"
+    if expected is None:
+        assert "reana_cli_loopback_port" not in response.json
+    else:
+        assert response.json["reana_cli_loopback_port"] == expected
+        assert isinstance(response.json["reana_cli_loopback_port"], int)
+
+
+@pytest.mark.parametrize(
     "setting", ["0", "-1", "not-a-number", "", True, 1.5, None, "1e100"]
 )
 def test_factory_rejects_unusable_gitlab_webhook_lifetime(setting):
